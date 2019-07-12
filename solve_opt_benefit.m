@@ -21,7 +21,7 @@ pop_weights = pop_weights./sum(pop_weights);
 
 % Solving balanced budget over benefits, given population weights
 
-benefits = linspace(0,2,params.num_balanced_budgets);
+benefits = linspace(0,1.5,params.num_balanced_budgets);
 taxs     = zeros(1,params.num_balanced_budgets);
 welfares = zeros(1,params.num_balanced_budgets);
 
@@ -34,14 +34,14 @@ for ib = 1:params.num_balanced_budgets
     % Preallocating vectors
     govt_revs          = zeros( 1, params.num_tax_trials )         ;
     potential_welfares = zeros( 1, params.num_tax_trials )         ;
-    tax_grid           = linspace( 0, 0.7, params.num_tax_trials ) ;
+    tax_grid           = linspace( 0, 0.9, params.num_tax_trials ) ;
     for it = 1:params.num_tax_trials %generate a grid of aggregate benefits and gov't revenue for various tax rates
         [aggregates, profiles] = solve_aggregates_mex(tax_grid(it), pop_weights, benefits(ib),...
                                                     params                                ); %#ok<ASGLU>
         govt_revs         (it) = aggregates.government_revenue;    
         potential_welfares(it) = aggregates.welfare           ;
     end
-
+    
     f            = @(x) interp1( tax_grid, govt_revs - aggregates.benefits, x,'spline', inf); %interpolates over budget balancing gov't revenue and benefits expenditures
     taxs    (ib) = fsolve(@(x) f(x), (tax_grid(1) + tax_grid(end))/2, optim_options); %finds optimal tax rate over budget balancing rate; uses this to solve for optimized aggregates
     welfares(ib) = interp1(tax_grid,potential_welfares,taxs(ib),'spline', inf);
@@ -61,7 +61,13 @@ opt_results.benefit = opt_benefit;
 opt_results.welfare = opt_welfare;
 opt_results.tax     = opt_tax    ;
 
-[opt_aggregates, opt_profiles] = solve_aggregates_mex(opt_tax, pop_weights, opt_benefit, params);
-opt_aggregates.average_hours = (sum(pop_weights(1:params.retirement_age - 1).*opt_profiles.hours(1:params.retirement_age - 1)))./(sum(pop_weights(1:params.retirement_age - 1)));
+[opt_aggregates, opt_profiles]  = solve_aggregates_mex(opt_tax, pop_weights, opt_benefit, params)                         ;
+opt_aggregates.average_hours    = (sum(pop_weights(1:params.retirement_age - 1).*opt_profiles.hours(1:params.retirement_age - 1)))./(sum(pop_weights(1:params.retirement_age - 1)));
+% opt_aggregates.replacement_rate = sum(opt_profiles.benefits(params.retirement_age:end))/sum(params.productivity_profile(1:params.retirement_age - 1));
+norm_weights                    = pop_weights(1:params.retirement_age-1)./sum(pop_weights(1:params.retirement_age-1));
+average_labor_income            = sum(norm_weights                                        .*...
+                                 (params.productivity_profile(1:params.retirement_age - 1)'.*...
+                                  opt_profiles.hours         (1:params.retirement_age - 1)));
+opt_aggregates.replacement_rate = opt_benefit/average_labor_income;
 
 end
